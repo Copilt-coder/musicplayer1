@@ -10,10 +10,10 @@ export default safe(async (req, res) => {
   const id = String(songId);
 
   // Limite par invité
-  const usedKey = `guest:${guestId}`;
+/*  const usedKey = `guest:${guestId}`;
   const used = Number(await redis.get(usedKey)) || 0;
   if (used >= CONFIG.maxPerGuest) {
-  return res.status(429).json({ error: `Tu as utilisé tes ${CONFIG.maxPerGuest} demandes. Merci !` });
+  return res.status(429).json({ error: `Tu as utilisé tes ${CONFIG.maxPerGuest} demandes. Merci !` }); */
   }
 
   const items = await getItems(true);
