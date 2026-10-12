@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Notre playlist – Mariage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <h1>Quelle chanson va faire danser tout le monde&nbsp;?</h1>
+  <p class="lead">Propose ta chanson, elle rejoindra la playlist de la soirée de [Prénom] &amp; [Prénom].</p>
+
+  <div class="field"><label for="title">Titre</label>
+    <input id="title" autocomplete="off" placeholder="Ex. Je danse dans ma tête"></div>
+  <div class="field"><label for="artist">Artiste</label>
+    <input id="artist" autocomplete="off" placeholder="Ex. Pomme"></div>
+  <div class="field"><label for="name">Ton prénom (facultatif)</label>
+    <input id="name" maxlength="30" autocomplete="given-name"></div>
+
+  <p id="msg" role="status" aria-live="polite"></p>
+  <div id="results"></div>
+
+  <h2>Déjà demandées</h2>
+  <p id="left" class="muted"></p>
+  <div id="queue"></div>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let guestId = localStorage.getItem('guestId');
+if (!guestId) { guestId = crypto.randomUUID(); localStorage.setItem('guestId', guestId); }
+
+function say(text, ok) { const m = $('#msg'); m.textContent = text; m.className = ok ? 'ok' : 'err'; }
+
+function row(s) {
+  const tag = s.votes !== undefined ? `+1 (${s.votes})` : (s.already ? '+1' : 'Demander');
+  const img = s.artwork ? `<img src="${esc(s.artwork)}" alt="">` : '<span class="ph"></span>';
+  return `<button class="row" data-id="${esc(s.id)}">${img}<span class="txt"><b>${esc(s.title)}</b><small>${esc(s.artist)}</small></span><span class="tag">${tag}</span></button>`;
+}
+
+let timer;
+function onType() { clearTimeout(timer); timer = setTimeout(search, 350); }
+$('#title').addEventListener('input', onType);
+$('#artist').addEventListener('input', onType);
+
+async function search() {
+  const q = `${$('#title').value} ${$('#artist').value}`.trim();
+  const box = $('#results');
+  if (q.length < 2) { box.innerHTML = ''; return; }
+  try {
+    const r = await fetch('/api/search?q=' + encodeURIComponent(q));
+    const d = await r.json();
+    if (!r.ok) return say(d.error, false);
+    box.innerHTML = d.results.length
+      ? d.results.map(row).join('')
+      : '<p class="muted">Aucun résultat. Vérifie l’orthographe ou ajoute le nom de l’artiste.</p>';
+  } catch { say('Connexion impossible, réessaie dans un instant.', false); }
+}
+
+async function request(songId) {
+  try {
+    const r = await fetch('/api/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ songId, guestId, name: $('#name').value }),
+    });
+    const d = await r.json();
+    say(d.message || d.error, r.ok);
+    if (r.ok) { $('#title').value = ''; $('#artist').value = ''; $('#results').innerHTML = ''; }
+  } catch { say('Connexion impossible, réessaie dans un instant.', false); }
+  loadQueue();
+}
+
+document.addEventListener('click', (e) => {
+  const b = e.target.closest('.row');
+  if (b) request(b.dataset.id);
+});
+
+async function loadQueue() {
+  try {
+    const r = await fetch('/api/queue?guestId=' + encodeURIComponent(guestId));
+    const d = await r.json();
+    $('#queue').innerHTML = d.list.length ? d.list.map(row).join('') : '<p class="muted">Personne n’a encore proposé de chanson. À toi de lancer la soirée !</p>';
+    $('#left').textContent = d.remaining > 0
+      ? `Il te reste ${d.remaining} demande${d.remaining > 1 ? 's' : ''}. Touche une chanson pour lui ajouter ton +1.`
+      : 'Tu as utilisé toutes tes demandes. Merci !';
+  } catch {}
+}
+loadQueue();
+setInterval(loadQueue, 20000);
+</script>
+</body>
+</html>

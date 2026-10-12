@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Admin – Playlist mariage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main>
+  <section id="login">
+    <h1>Espace mariés</h1>
+    <div class="field"><label for="pwd">Mot de passe</label><input id="pwd" type="password"></div>
+    <button id="go" class="btn">Entrer</button>
+  </section>
+
+  <section id="app" hidden>
+    <h1>Playlist du mariage</h1>
+
+    <div id="connect" hidden>
+      <p class="lead">Spotify n’est pas encore connecté. Connectez le compte Premium qui jouera la musique.</p>
+      <button id="connectBtn" class="btn">Connecter Spotify</button>
+    </div>
+
+    <div id="main" hidden>
+      <div class="now"><small>En lecture</small><div id="now">Rien pour l’instant</div></div>
+      <div class="bar">
+        <button id="start">Lancer la playlist</button>
+        <button id="pause">Pause</button>
+        <button id="resume">Reprendre</button>
+        <button id="next">Chanson suivante</button>
+      </div>
+      <p class="muted">La lecture se fait dans l’application Spotify (ordinateur ou téléphone branché aux enceintes). Ouvrez-la et lancez n’importe quel titre une première fois pour qu’elle soit « active ». Désactivez la lecture aléatoire. <a id="plink" href="#" target="_blank" rel="noopener">Ouvrir la playlist dans Spotify</a></p>
+
+      <h2>À venir</h2>
+      <ol id="up"></ol>
+      <div class="bar"><button id="sort">Trier par popularité</button></div>
+
+      <h2>Déjà jouées</h2>
+      <ul id="done"></ul>
+
+      <h2>Liste noire</h2>
+      <ul id="ban"></ul>
+      <div class="bar"><button id="reconnect">Reconnecter Spotify</button></div>
+    </div>
+  </section>
+</main>
+<script>
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+let pwd = sessionStorage.getItem('pwd') || '';
+let state = { connected: true, list: [], blacklist: {} };
+let timer = null;
+const H = () => ({ 'Content-Type': 'application/json', 'x-admin-password': pwd });
+
+async function load() {
+  const r = await fetch('/api/queue', { headers: H() });
+  if (r.status === 401) { sessionStorage.removeItem('pwd'); $('#login').hidden = false; $('#app').hidden = true; return false; }
+  if (!r.ok) return true;                       // erreur passagère : on réessaiera au prochain tour
+  state = await r.json();
+  render();
+  return true;
+}
+
+async function login() {
+  const typed = $('#pwd').value;
+  pwd = typed || pwd;
+  if (await load()) {
+    sessionStorage.setItem('pwd', pwd);
+    $('#login').hidden = true; $('#app').hidden = false;
+    if (!timer) timer = setInterval(load, 8000);
+  } else if (typed) alert('Mot de passe incorrect.');
+}
+$('#go').onclick = login;
+$('#pwd').addEventListener('keydown', (e) => e.key === 'Enter' && login());
+if (pwd) login();
+const q = new URLSearchParams(location.search);
+if (q.get('error')) alert('Spotify a refusé la connexion : ' + q.get('error'));
+
+async function act(action, extra = {}) {
+  const r = await fetch('/api/admin', { method: 'POST', headers: H(), body: JSON.stringify({ action, ...extra }) });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) alert(d.error || 'Erreur');
+  await load();
+}
+
+async function connect() {
+  const r = await fetch('/api/auth', { method: 'POST', headers: H() });
+  const d = await r.json();
+  if (d.url) location.href = d.url; else alert(d.error || 'Erreur');
+}
+$('#connectBtn').onclick = connect;
+$('#reconnect').onclick = connect;
+
+$('#start').onclick = () => act('player', { cmd: 'play-playlist' });
+$('#pause').onclick = () => act('player', { cmd: 'pause' });
+$('#resume').onclick = () => act('player', { cmd: 'resume' });
+$('#next').onclick = () => act('player', { cmd: 'next' });
+$('#sort').onclick = () => act('sort');
+
+function render() {
+  $('#connect').hidden = state.connected;
+  $('#main').hidden = !state.connected;
+  if (!state.connected) return;
+
+  const now = state.list.find((s) => s.status === 'now');
+  $('#now').textContent = now ? `${now.title} — ${now.artist}` : 'Rien en lecture';
+  $('#plink').href = state.playlistUrl;
+
+  const next = state.list.filter((s) => s.status === 'next');
+  $('#up').innerHTML = next.map((s, i) => `
+    <li class="item">
+      <div class="info"><b>${esc(s.title)}</b> — ${esc(s.artist)}
+        <small>${s.votes > 1 ? '+' + (s.votes - 1) + ' · ' : ''}${s.requestedBy.length ? 'demandé par ' + esc(s.requestedBy.join(', ')) : 'anonyme'}</small></div>
+      <div class="acts" data-id="${esc(s.id)}">
+        <button data-act="top" ${i === 0 ? 'disabled' : ''}>En premier</button>
+        <button data-act="up" aria-label="Monter" ${i === 0 ? 'disabled' : ''}>↑</button>
+        <button data-act="down" aria-label="Descendre" ${i === next.length - 1 ? 'disabled' : ''}>↓</button>
+        <button data-act="del" class="danger">Retirer</button>
+        <button data-act="ban" class="danger" title="Retirer et interdire ce titre">Interdire</button>
+        <button data-act="banArtist" class="danger" title="Retirer et interdire cet artiste">Interdire l’artiste</button>
+      </div>
+    </li>`).join('') || '<li class="muted">La file est vide.</li>';
+
+  $('#done').innerHTML = state.list.filter((s) => s.status === 'played').map((s) =>
+    `<li class="item"><div class="info">${esc(s.title)} — ${esc(s.artist)}</div></li>`).join('') || '<li class="muted">Rien de joué pour l’instant.</li>';
+
+  $('#ban').innerHTML = Object.entries(state.blacklist).map(([k, label]) =>
+    `<li class="item"><div class="info">${esc(label)}</div><div class="acts"><button data-unban="${esc(k)}">Autoriser à nouveau</button></div></li>`).join('') || '<li class="muted">Aucune interdiction.</li>';
+}
+
+document.addEventListener('click', (e) => {
+  const u = e.target.closest('button[data-unban]');
+  if (u) return act('unban', { entry: u.dataset.unban });
+  const b = e.target.closest('button[data-act]');
+  if (!b || b.disabled) return;
+  const id = b.parentElement.dataset.id, a = b.dataset.act;
+  if (['up', 'down', 'top'].includes(a)) return act('move', { id, dir: a });
+  if (a === 'del') return act('remove', { id });
+  if (a === 'ban' && confirm('Retirer ce titre et l’interdire pour la suite ?')) return act('remove', { id, mode: 'song' });
+  if (a === 'banArtist' && confirm('Retirer tous les titres de cet artiste et l’interdire ?')) return act('remove', { id, mode: 'artist' });
+});
+</script>
+</body>
+</html>
