@@ -12,7 +12,7 @@
 <body>
 <main>
   <h1>Quelle chanson va faire danser tout le monde&nbsp;?</h1>
-  <p class="lead">Propose ta chanson, elle rejoindra la playlist de la soirée ! ].</p>
+  <p class="lead">Propose ta chanson, elle rejoindra la playlist de la soirée !.</p>
 
   <div class="field"><label for="title">Titre</label>
     <input id="title" autocomplete="off" placeholder="Ex. Je danse dans ma tête"></div>
@@ -87,8 +87,6 @@ async function loadQueue() {
     const d = await r.json();
     $('#queue').innerHTML = d.list.length ? d.list.map(row).join('') : '<p class="muted">Personne n’a encore proposé de chanson. À toi de lancer la soirée !</p>';
     $('#left').textContent = d.remaining > 0
-      ? `Il te reste ${d.remaining} demande${d.remaining > 1 ? 's' : ''}. Touche une chanson pour lui ajouter ton +1.`
-      : 'Tu as utilisé toutes tes demandes. Merci !';
   } catch {}
 }
 loadQueue();
