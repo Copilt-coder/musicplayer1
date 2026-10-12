@@ -87,6 +87,8 @@ async function loadQueue() {
     const d = await r.json();
     $('#queue').innerHTML = d.list.length ? d.list.map(row).join('') : '<p class="muted">Personne n’a encore proposé de chanson. À toi de lancer la soirée !</p>';
     $('#left').textContent = d.remaining > 0
+      ? ' Touche une chanson pour lui ajouter ton +1.`
+      : 'Tu as utilisé toutes tes demandes. Merci !';
   } catch {}
 }
 loadQueue();
