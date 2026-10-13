@@ -8,7 +8,21 @@ export default safe(async (req, res) => {
     return res.status(400).json({ error: 'Demande invalide.' });
   }
   const id = String(songId);
+const { songId, guestId, manualSong } = req.body || {};
+  const name = String(req.body?.name || '').trim().slice(0, 30);
 
+  // Si c'est une demande manuelle (texte libre)
+  if (manualSong) {
+    const entry = JSON.stringify({ 
+      guest: name || 'Anonyme', 
+      song: String(manualSong).trim(), 
+      date: new Date().toLocaleString('fr-FR') 
+    });
+    // On ajoute ça dans une liste Redis nommée 'manual_requests'
+    await redis.lpush('manual_requests', entry);
+    // await redis.incr(usedKey); // Décommente si tu veux que ça compte dans la limite des requêtes
+    return res.json({ message: 'Ta proposition a été notée manuellement !' });
+  }
   // Limite par invité
 const usedKey = `guest:${guestId}`;
   /*  
