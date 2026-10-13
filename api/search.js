@@ -1,4 +1,4 @@
-import { CONFIG, sp, formatTrack, getItems, getBlacklist, isBlocked, safe } from './_lib.js';
+import { CONFIG, sp, formatTrack, getItems, cursorIndex, getBlacklist, isBlocked, safe } from './_lib.js';
 
 export default safe(async (req, res) => {
   const q = String(req.query.q || '').trim().slice(0, 100);
@@ -9,7 +9,9 @@ export default safe(async (req, res) => {
     sp(`/search?type=track&limit=10&offset=${offset}&market=${CONFIG.market}&q=${encodeURIComponent(q)}`)
   ));
   const bl = await getBlacklist();
-  const inList = new Set((await getItems()).map((t) => t.id));
+  const items = await getItems();
+  const cur = await cursorIndex(items);
+  const pos = new Map(items.map((t, i) => [t.id, i]));
 
   const seen = new Set();
   const results = pages
@@ -18,6 +20,6 @@ export default safe(async (req, res) => {
     .map(formatTrack)
     .filter((t) => !(CONFIG.blockExplicit && t.explicit) && !isBlocked(t, bl))
     .slice(0, 8)
-    .map((t) => ({ id: t.id, title: t.title, artist: t.artist, artwork: t.artwork, already: inList.has(t.id) }));
+    .map((t) => ({ id: t.id, title: t.title, artist: t.artist, artwork: t.artwork, already: pos.has(t.id), played: pos.has(t.id) && pos.get(t.id) < cur }));
   res.json({ results });
 });
