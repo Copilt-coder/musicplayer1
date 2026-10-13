@@ -37,9 +37,13 @@ export default safe(async (req, res) => {
   const cur = await cursorIndex(items);
   const gid = String(req.query.guestId || '');
   const used = gid ? Number(await redis.get(`guest:${gid}`)) || 0 : 0;
+  const rows = items.map((t, i) => ({
+    id: t.id, title: t.title, artist: t.artist, artwork: t.artwork,
+    votes: meta[t.id]?.votes || 1, played: i < cur, now: i === cur,
+  }));
   res.json({
     connected: true,
-    list: items.slice(cur + 1).map((t) => ({ id: t.id, title: t.title, artist: t.artist, artwork: t.artwork, votes: meta[t.id]?.votes || 1 })),
+    list: [...rows.filter((r) => !r.played), ...rows.filter((r) => r.played)],
     remaining: Math.max(0, CONFIG.maxPerGuest - used),
   });
 });
