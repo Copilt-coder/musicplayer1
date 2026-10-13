@@ -11,17 +11,18 @@ export default safe(async (req, res) => {
 const { songId, guestId, manualSong } = req.body || {};
   const name = String(req.body?.name || '').trim().slice(0, 30);
 
-  // Si c'est une demande manuelle (texte libre)
-  if (manualSong) {
-    const entry = JSON.stringify({ 
-      guest: name || 'Anonyme', 
-      song: String(manualSong).trim(), 
-      date: new Date().toLocaleString('fr-FR') 
+if (manualSong) {
+    // Envoi transparent vers Make.com qui remplira le Google Sheet
+    await fetch('https://hook.eu1.make.com/TON_LIEN_WEBHOOK', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        invite: name || 'Anonyme',
+        musique: manualSong,
+        date: new Date().toLocaleString('fr-FR')
+      })
     });
-    // On ajoute ça dans une liste Redis nommée 'manual_requests'
-    await redis.lpush('manual_requests', entry);
-    // await redis.incr(usedKey); // Décommente si tu veux que ça compte dans la limite des requêtes
-    return res.json({ message: 'Ta proposition a été notée manuellement !' });
+    return res.json({ message: 'Ta proposition a été ajoutée au tableur !' });
   }
   // Limite par invité
 const usedKey = `guest:${guestId}`;
