@@ -10,10 +10,10 @@ export default safe(async (req, res) => {
 
   // Limite par invité (valable pour les demandes Spotify ET manuelles)
   const usedKey = `guest:${guestId}`;
-  const used = Number(await redis.get(usedKey)) || 0;
-  if (used >= CONFIG.maxPerGuest) {
-    return res.status(429).json({ error: `Tu as utilisé tes ${CONFIG.maxPerGuest} demandes. Merci !` });
-  }
+  //const used = Number(await redis.get(usedKey)) || 0;
+ // if (used >= CONFIG.maxPerGuest) {
+  //  return res.status(429).json({ error: `Tu as utilisé tes ${CONFIG.maxPerGuest} demandes. Merci !` });
+  //}
 
   // Demande manuelle : envoyée à Make.com, qui remplit le Google Sheet
   if (manualSong) {
