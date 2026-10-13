@@ -10,10 +10,10 @@ export default safe(async (req, res) => {
 
   // Limite par invité (valable pour les demandes Spotify ET manuelles)
   const usedKey = `guest:${guestId}`;
-  //const used = Number(await redis.get(usedKey)) || 0;
- // if (used >= CONFIG.maxPerGuest) {
-  //  return res.status(429).json({ error: `Tu as utilisé tes ${CONFIG.maxPerGuest} demandes. Merci !` });
-  //}
+  const used = Number(await redis.get(usedKey)) || 0;
+  if (used >= CONFIG.maxPerGuest) {
+    return res.status(429).json({ error: `Tu as utilisé tes ${CONFIG.maxPerGuest} demandes. Merci !` });
+  }
 
   // Demande manuelle : envoyée à Make.com, qui remplit le Google Sheet
   if (manualSong) {
@@ -50,7 +50,7 @@ export default safe(async (req, res) => {
 
   // Anti-doublon : ça devient un « +1 »
   if (idx !== -1) {
-    if (idx <= (await cursorIndex(items))) return res.status(409).json({ error: 'Cette chanson a déjà été jouée ce soir.' });
+    const alreadyPlayed = idx < (await cursorIndex(items));
     const meta = (await redis.hget('meta', id)) || { votes: 1, voters: [], requestedBy: [] };
     if (meta.voters.includes(guestId)) return res.status(409).json({ error: 'Tu as déjà demandé cette chanson.' });
     meta.votes += 1;
@@ -58,7 +58,11 @@ export default safe(async (req, res) => {
     if (name) meta.requestedBy.push(name);
     await redis.hset('meta', { [id]: meta });
     await redis.incr(usedKey);
-    return res.json({ message: 'Cette chanson était déjà dans la liste : ton +1 est ajouté !' });
+    return res.json({
+      message: alreadyPlayed
+        ? 'Cette chanson a déjà été jouée ce soir, mais ton +1 est noté !'
+        : 'Cette chanson était déjà dans la liste : ton +1 est ajouté !',
+    });
   }
 
   // Nouvelle chanson : on la relit chez Spotify (on ne fait pas confiance au navigateur)
