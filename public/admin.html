@@ -128,7 +128,7 @@ function render() {
     </li>`).join('') || '<li class="muted">La file est vide.</li>';
 
   $('#done').innerHTML = state.list.filter((s) => s.status === 'played').map((s) =>
-    `<li class="item"><div class="info">${esc(s.title)} — ${esc(s.artist)}</div></li>`).join('') || '<li class="muted">Rien de joué pour l’instant.</li>';
+    `<li class="item"><div class="info">${esc(s.title)} — ${esc(s.artist)}${s.votes > 1 ? '<small>+' + (s.votes - 1) + ' demande' + (s.votes > 2 ? 's' : '') + ' en plus</small>' : ''}</div></li>`).join('') || '<li class="muted">Rien de joué pour l’instant.</li>';
 
   $('#ban').innerHTML = Object.entries(state.blacklist).map(([k, label]) =>
     `<li class="item"><div class="info">${esc(label)}</div><div class="acts"><button data-unban="${esc(k)}">Autoriser à nouveau</button></div></li>`).join('') || '<li class="muted">Aucune interdiction.</li>';
