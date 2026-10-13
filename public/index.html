@@ -8,11 +8,30 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Figtree:wght@400;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
+<style>
+  /* Petit style additionnel pour le bouton manuel */
+  #manual-section {
+    margin-top: 15px;
+    padding: 15px;
+    background: rgba(0,0,0,0.03);
+    border-radius: 8px;
+    text-align: center;
+  }
+  #btn-manual {
+    padding: 10px 15px;
+    cursor: pointer;
+    border-radius: 5px;
+    background: #333;
+    color: #fff;
+    border: none;
+    font-weight: 600;
+  }
+</style>
 </head>
 <body>
 <main>
   <h1>Quelle chanson va faire danser tout le monde&nbsp;?</h1>
-  <p class="lead">Propose ta chanson, elle rejoindra la playlist de la soirée ! ].</p>
+  <p class="lead">Propose ta chanson, elle rejoindra la playlist de la soirée !</p>
 
   <div class="field"><label for="title">Titre</label>
     <input id="title" autocomplete="off" placeholder="Ex. Je danse dans ma tête"></div>
@@ -24,18 +43,24 @@
   <p id="msg" role="status" aria-live="polite"></p>
   <div id="results"></div>
 
+  <!-- NOUVEAU : Bouton pour les demandes manuelles -->
+  <div id="manual-section">
+    <p class="muted" style="margin-top:0; font-size:0.9em;">Tu ne trouves pas ta musique dans la liste ?</p>
+    <button id="btn-manual">Ajouter manuellement</button>
+  </div>
+
   <h2>Déjà demandées</h2>
   <p id="left" class="muted"></p>
   <div id="queue"></div>
 </main>
 <script>
-const $ = (s) => document.querySelector(s);
+const \$ = (s) => document.querySelector(s);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 let guestId = localStorage.getItem('guestId');
 if (!guestId) { guestId = crypto.randomUUID(); localStorage.setItem('guestId', guestId); }
 
-function say(text, ok) { const m = $('#msg'); m.textContent = text; m.className = ok ? 'ok' : 'err'; }
+function say(text, ok) { const m = \$('#msg'); m.textContent = text; m.className = ok ? 'ok' : 'err'; }
 
 function row(s) {
   const tag = s.votes !== undefined ? `+1 (${s.votes})` : (s.already ? '+1' : 'Demander');
@@ -45,12 +70,12 @@ function row(s) {
 
 let timer;
 function onType() { clearTimeout(timer); timer = setTimeout(search, 350); }
-$('#title').addEventListener('input', onType);
-$('#artist').addEventListener('input', onType);
+\$('#title').addEventListener('input', onType);
+\$('#artist').addEventListener('input', onType);
 
 async function search() {
   const q = `${$('#title').value} ${$('#artist').value}`.trim();
-  const box = $('#results');
+  const box = \$('#results');
   if (q.length < 2) { box.innerHTML = ''; return; }
   try {
     const r = await fetch('/api/search?q=' + encodeURIComponent(q));
@@ -62,16 +87,41 @@ async function search() {
   } catch { say('Connexion impossible, réessaie dans un instant.', false); }
 }
 
+// NOUVEAU : Fonction pour envoyer une musique manuelle
+\$('#btn-manual').addEventListener('click', async () => {
+  const title = \$('#title').value.trim();
+  const artist = \$('#artist').value.trim();
+  
+  if (!title && !artist) {
+    return say('Remplis au moins le titre ou l\'artiste avant d\'ajouter manuellement.', false);
+  }
+  
+  // Concatène Titre + Artiste (ex: "Je danse dans ma tête - Pomme")
+  const manualSong = `${title} ${artist ? '- ' + artist : ''}`.trim();
+
+  try {
+    const r = await fetch('/api/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // On envoie "manualSong" à la place de "songId"
+      body: JSON.stringify({ manualSong, guestId, name: \$('#name').value }),
+    });
+    const d = await r.json();
+    say(d.message || d.error, r.ok);
+    if (r.ok) { \$('#title').value = ''; $('#artist').value = ''; $('#results').innerHTML = ''; }
+  } catch { say('Connexion impossible, réessaie dans un instant.', false); }
+});
+
 async function request(songId) {
   try {
     const r = await fetch('/api/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ songId, guestId, name: $('#name').value }),
+      body: JSON.stringify({ songId, guestId, name: \$('#name').value }),
     });
     const d = await r.json();
     say(d.message || d.error, r.ok);
-    if (r.ok) { $('#title').value = ''; $('#artist').value = ''; $('#results').innerHTML = ''; }
+    if (r.ok) { \$('#title').value = ''; $('#artist').value = ''; $('#results').innerHTML = ''; }
   } catch { say('Connexion impossible, réessaie dans un instant.', false); }
   loadQueue();
 }
@@ -85,8 +135,8 @@ async function loadQueue() {
   try {
     const r = await fetch('/api/queue?guestId=' + encodeURIComponent(guestId));
     const d = await r.json();
-    $('#queue').innerHTML = d.list.length ? d.list.map(row).join('') : '<p class="muted">Personne n’a encore proposé de chanson. À toi de lancer la soirée !</p>';
-    $('#left').textContent = d.remaining > 0
+    \$('#queue').innerHTML = d.list.length ? d.list.map(row).join('') : '<p class="muted">Personne n’a encore proposé de chanson. À toi de lancer la soirée !</p>';
+    \$('#left').textContent = d.remaining > 0
       ? `Touche une chanson pour lui ajouter ton +1.`
       : 'Tu as utilisé toutes tes demandes. Merci !';
   } catch {}
