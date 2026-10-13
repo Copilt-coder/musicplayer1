@@ -65,7 +65,8 @@ function say(text, ok) { const m = $('#msg'); m.textContent = text; m.className 
 function row(s) {
   const tag = s.votes !== undefined ? `+1 (${s.votes})` : (s.already ? '+1' : 'Demander');
   const img = s.artwork ? `<img src="${esc(s.artwork)}" alt="">` : '<span class="ph"></span>';
-  return `<button class="row" data-id="${esc(s.id)}">${img}<span class="txt"><b>${esc(s.title)}</b><small>${esc(s.artist)}</small></span><span class="tag">${tag}</span></button>`;
+  const badge = s.played ? '<span class="badge">Déjà jouée</span>' : (s.now ? '<span class="badge now">En lecture</span>' : '');
+  return `<button class="row${s.played ? ' played' : ''}" data-id="${esc(s.id)}">${img}<span class="txt"><b>${esc(s.title)}</b><small class="sub"><span class="art">${esc(s.artist)}</span>${badge}</small></span><span class="tag">${tag}</span></button>`;
 }
 
 let timer;
