@@ -2,35 +2,48 @@ import { redis, CONFIG, sp, formatTrack, getItems, invalidate, cursorIndex, play
 
 export default safe(async (req, res) => {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Méthode non autorisée.' });
-  const { songId, guestId } = req.body || {};
+  const { songId, guestId, manualSong } = req.body || {};
   const name = String(req.body?.name || '').trim().slice(0, 30);
-  if (!/^[A-Za-z0-9]{22}$/.test(String(songId)) || !/^[\w-]{8,64}$/.test(String(guestId || ''))) {
+  if (!/^[\w-]{8,64}$/.test(String(guestId || ''))) {
+    return res.status(400).json({ error: 'Demande invalide.' });
+  }
+
+  // Limite par invité (valable pour les demandes Spotify ET manuelles)
+  const usedKey = `guest:${guestId}`;
+  const used = Number(await redis.get(usedKey)) || 0;
+  if (used >= CONFIG.maxPerGuest) {
+    return res.status(429).json({ error: `Tu as utilisé tes ${CONFIG.maxPerGuest} demandes. Merci !` });
+  }
+
+  // Demande manuelle : envoyée à Make.com, qui remplit le Google Sheet
+  if (manualSong) {
+    const hook = process.env.MAKE_WEBHOOK_URL;
+    if (!hook) return res.status(503).json({ error: 'L’ajout manuel n’est pas encore configuré.' });
+    let r;
+    try {
+      r = await fetch(hook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invite: name || 'Anonyme',
+          musique: String(manualSong).trim().slice(0, 200),
+          date: new Date().toLocaleString('fr-FR', { timeZone: 'Europe/Paris' }),
+        }),
+        signal: AbortSignal.timeout(8000),
+      });
+    } catch {
+      return res.status(502).json({ error: 'Impossible d’enregistrer ta proposition, réessaie dans un instant.' });
+    }
+    if (!r.ok) return res.status(502).json({ error: 'Impossible d’enregistrer ta proposition, réessaie dans un instant.' });
+    await redis.incr(usedKey);
+    return res.json({ message: 'Ta proposition a été ajoutée au tableur !' });
+  }
+
+  // Demande Spotify
+  if (!/^[A-Za-z0-9]{22}$/.test(String(songId))) {
     return res.status(400).json({ error: 'Demande invalide.' });
   }
   const id = String(songId);
-const { songId, guestId, manualSong } = req.body || {};
-  const name = String(req.body?.name || '').trim().slice(0, 30);
-
-if (manualSong) {
-    // Envoi transparent vers Make.com qui remplira le Google Sheet
-    await fetch('https://hook.eu1.make.com/https://hook.eu1.make.com/tpx3vvvg8u7oi48beh71robrckykour5', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        invite: name || 'Anonyme',
-        musique: manualSong,
-        date: new Date().toLocaleString('fr-FR')
-      })
-    });
-    return res.json({ message: 'Ta proposition a été ajoutée au tableur !' });
-  }
-  // Limite par invité
-const usedKey = `guest:${guestId}`;
-  /*  
-  const used = Number(await redis.get(usedKey)) || 0;
-  if (used >= CONFIG.maxPerGuest) {
-  return res.status(429).json({ error: `Tu as utilisé tes ${CONFIG.maxPerGuest} demandes. Merci !` });
-  } */
 
   const items = await getItems(true);
   const idx = items.findIndex((t) => t.id === id);
